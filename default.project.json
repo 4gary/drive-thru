@@ -1,0 +1,64 @@
+{
+  "name": "NightShiftDriveThru",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CameraMaxZoomDistance": 30,
+        "CharacterWalkSpeed": 16,
+        "CharacterJumpPower": 40,
+        "CharacterUseJumpPower": true
+      },
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "StarterGui": {
+      "$properties": {
+        "ResetPlayerGuiOnSpawn": false
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": false
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false
+      },
+      "Munchies": {
+        "$path": "assets/Munchies.rbxmx"
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "ClockTime": 0.5,
+        "Brightness": 1,
+        "Ambient": [0.18, 0.18, 0.24],
+        "OutdoorAmbient": [0.22, 0.22, 0.32],
+        "EnvironmentDiffuseScale": 0.3,
+        "EnvironmentSpecularScale": 0.3,
+        "GlobalShadows": true,
+        "Technology": "Future"
+      }
+    },
+    "SoundService": {
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}

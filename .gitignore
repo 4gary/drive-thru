@@ -1,0 +1,6 @@
+# Build outputs (the shipped place file lives at the repo root and IS committed)
+/build/
+sourcemap.json
+*.rbxl.lock
+*.rbxlx.lock
+.DS_Store
