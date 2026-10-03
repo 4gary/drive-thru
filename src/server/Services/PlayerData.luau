@@ -91,9 +91,10 @@ local function load(player: Player)
 				data = result
 				break
 			else
-				if attempt == 1 and string.find(tostring(result), "403") then
+				local message = string.lower(tostring(result))
+				if string.find(message, "403") or string.find(message, "studio") or string.find(message, "api") or string.find(message, "publish") then
 					memoryOnly = true
-					warn("[PlayerData] No API access — saves are in-memory only this session.")
+					warn("[PlayerData] No API access — saves are in-memory only this session. (" .. tostring(result) .. ")")
 					break
 				end
 				task.wait(attempt)
