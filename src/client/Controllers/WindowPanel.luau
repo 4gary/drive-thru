@@ -99,23 +99,54 @@ local function replaceWithMunchHead(clone: Model)
 	munch:Destroy()
 end
 
-local function addTears(clone: Model)
+-- ViewportFrames don't render SurfaceGuis, so faces in the reflection are rebuilt from parts.
+local function facePart(parent: Instance, cf: CFrame, size: Vector3, color: Color3, neon: boolean?)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.Size = size
+	p.CFrame = cf
+	p.Color = color
+	p.Material = if neon then Enum.Material.Neon else Enum.Material.SmoothPlastic
+	p.Parent = parent
+	return p
+end
+
+local function rebuildFaces(clone: Model, crying: boolean)
 	for _, d in clone:GetDescendants() do
-		if d:IsA("Frame") and d.Name == "Face" then
-			for i, x in { 0.3, 0.7 } do
-				local tear = Instance.new("Frame")
-				tear.Name = "Tear" .. i
-				tear.AnchorPoint = Vector2.new(0.5, 0.5)
-				tear.Position = UDim2.fromScale(x, 0.62)
-				tear.Size = UDim2.fromScale(0.07, 0.16)
-				tear.BackgroundColor3 = Color3.fromRGB(90, 160, 255)
-				tear.BorderSizePixel = 0
-				tear.ZIndex = 5
-				local corner = Instance.new("UICorner")
-				corner.CornerRadius = UDim.new(0.5, 0)
-				corner.Parent = tear
-				tear.Parent = d
+		if d:IsA("SurfaceGui") and d.Parent and d.Parent:IsA("BasePart") then
+			local part = d.Parent :: BasePart
+			local w, h = part.Size.X, part.Size.Y
+			local front = part.CFrame * CFrame.new(0, 0, -part.Size.Z / 2 - 0.03)
+			local container = part.Parent or clone
+			if d.Name == "FaceGui" or d.Name == "MunchFace" then
+				local face = d:FindFirstChild("Face")
+				local mouth = face and face:FindFirstChild("Mouth") :: Frame?
+				local mouthWidth = if mouth then mouth.Size.X.Scale else 0.36
+				for _, x in { -0.18, 0.18 } do
+					facePart(container, front * CFrame.new(x * w, 0.1 * h, 0), Vector3.new(0.2 * w, 0.2 * h, 0.04), Color3.new(1, 1, 1))
+					facePart(container, front * CFrame.new(x * w, 0.08 * h, -0.02), Vector3.new(0.1 * w, 0.1 * h, 0.04), Color3.new(0, 0, 0))
+				end
+				facePart(container, front * CFrame.new(0, -0.22 * h, 0), Vector3.new(mouthWidth * w, 0.07 * h, 0.04), Color3.fromRGB(150, 40, 50))
+				if crying then
+					for _, x in { -0.2, 0.2 } do
+						facePart(container, front * CFrame.new(x * w, -0.1 * h, -0.02), Vector3.new(0.06 * w, 0.16 * h, 0.04), Color3.fromRGB(90, 160, 255), true)
+					end
+				end
+			elseif d.Name == "RobotFace" then
+				for _, x in { -0.2, 0.2 } do
+					facePart(container, front * CFrame.new(x * w, 0.1 * h, 0), Vector3.new(0.18 * w, 0.18 * h, 0.04), Color3.fromRGB(80, 255, 140), true)
+				end
 			end
+			d:Destroy()
+		end
+	end
+end
+
+local function clearViewport()
+	for _, child in viewport:GetChildren() do
+		if not child:IsA("UICorner") then
+			child:Destroy()
 		end
 	end
 end
@@ -123,7 +154,7 @@ end
 local function buildMirror()
 	mirrorToken += 1
 	local token = mirrorToken
-	viewport:ClearAllChildren()
+	clearViewport()
 	if not data or not data.car or not data.car.Parent then
 		return
 	end
@@ -144,9 +175,8 @@ local function buildMirror()
 				p:Destroy()
 			end
 		end
-	elseif tell == "Crying" then
-		addTears(clone)
 	end
+	rebuildFaces(clone, tell == "Crying")
 	clone.Parent = viewport
 	local camera = Instance.new("Camera")
 	local cf, fov = camCFrame("Mirror")
@@ -308,7 +338,9 @@ local function build()
 	uvButton = Kit.button(layer, "🔦 UV", T.panelLight, function()
 		World.setUV(not World.uv)
 		uvButton.BackgroundColor3 = if World.uv then T.uv else T.panelLight
-		State.action("UsedUV")
+		if World.uv then
+			State.action("UsedUV")
+		end
 	end, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 76), Size = UDim2.fromOffset(140, 52), Visible = false })
 	Kit.button(layer, "✕ BACK", T.ink, function()
 		WindowPanel.userClose()
@@ -316,7 +348,7 @@ local function build()
 	hintLabel = Kit.label(layer, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 74), Size = UDim2.fromOffset(760, 30), Font = T.bold, TextStrokeTransparency = 0.3, MaxText = 20 })
 	infoLabel = Kit.label(layer, "", {
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -112),
+		Position = UDim2.new(0.5, 0, 1, if UserInputService.TouchEnabled then -242 else -112),
 		Size = UDim2.fromOffset(760, 34),
 		BackgroundTransparency = 0.25,
 		BackgroundColor3 = T.ink,
@@ -359,12 +391,14 @@ local function build()
 	Kit.corner(receiptCard, 6)
 	Kit.padding(receiptCard, 12)
 	-- decision buttons (far apart)
+	-- on touch screens keep clear of the thumbstick (bottom-left) and jump button (bottom-right)
+	local lift = if UserInputService.TouchEnabled then 150 else 20
 	handOut = Kit.button(layer, "HAND OUT", T.good, function()
 		decide("handout")
-	end, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 24, 1, -20), Size = UDim2.fromOffset(300, 86) })
+	end, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 24, 1, -lift), Size = UDim2.fromOffset(300, 86) })
 	refuse = Kit.button(layer, "REFUSE\nSORRY, WE'RE CLOSED", T.bad, function()
 		decide("refuse")
-	end, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -24, 1, -20), Size = UDim2.fromOffset(300, 86) })
+	end, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -24, 1, -lift), Size = UDim2.fromOffset(300, 86) })
 end
 
 function WindowPanel.open(d)
@@ -413,7 +447,7 @@ function WindowPanel.close()
 	ContextActionService:UnbindAction("NS_WindowTabs")
 	if layer then
 		layer.Visible = false
-		viewport:ClearAllChildren()
+		clearViewport()
 	end
 	CameraView.pop("LaneCam")
 	CameraView.pop("Window")
@@ -448,8 +482,11 @@ function WindowPanel.init()
 		end
 	end)
 	player:GetAttributeChangedSignal("Ghost"):Connect(function()
-		if State.isGhost() and data then
-			Panels.close("Window")
+		if State.isGhost() then
+			-- a ghost can't work any station
+			for _, name in { "Window", "Order", "Assembly" } do
+				Panels.close(name)
+			end
 		end
 	end)
 end

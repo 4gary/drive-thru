@@ -23,6 +23,7 @@ local boothBody: Frame
 local startCard: Frame
 local notice: TextLabel
 local lastBoothSig = ""
+local countdownLabel: TextLabel? = nil
 local quickStartBusy = false
 
 local function toast(text: string, kind: string?)
@@ -43,8 +44,12 @@ local function renderBooth(lobby)
 		return
 	end
 	boothCard.Visible = true
-	local sig = ("%s:%d:%s:%s:%s:%d"):format(booth.id, booth.night, booth.privacy, tostring(booth.isLeader), table.concat(booth.members, ","), math.ceil(booth.countdown or 0))
+	-- the countdown updates in place; buttons only rebuild when something else changes
+	local sig = ("%s:%d:%s:%s:%s"):format(booth.id, booth.night, booth.privacy, tostring(booth.isLeader), table.concat(booth.members, ","))
 	if sig == lastBoothSig then
+		if countdownLabel then
+			countdownLabel.Text = ("Clocking in: %ds"):format(math.ceil(booth.countdown or 0))
+		end
 		return
 	end
 	lastBoothSig = sig
@@ -52,7 +57,7 @@ local function renderBooth(lobby)
 	Kit.label(boothBody, ("CLOCK-IN %s"):format(booth.id), { Size = UDim2.new(1, 0, 0, 30), Font = T.title, TextColor3 = T.mustard, LayoutOrder = 1 })
 	Kit.label(boothBody, ("NIGHT %d: %s"):format(booth.night, Nights.get(booth.night).title), { Size = UDim2.new(1, 0, 0, 28), Font = T.bold, LayoutOrder = 2, MaxText = 20 })
 	Kit.label(boothBody, ("Crew (%d/4): %s"):format(#booth.members, table.concat(booth.members, ", ")), { Size = UDim2.new(1, 0, 0, 26), TextColor3 = T.muted, LayoutOrder = 3, MaxText = 16 })
-	Kit.label(boothBody, ("Clocking in: %ds"):format(math.ceil(booth.countdown or 0)), { Size = UDim2.new(1, 0, 0, 26), Font = T.bold, TextColor3 = T.good, LayoutOrder = 4, MaxText = 18 })
+	countdownLabel = Kit.label(boothBody, ("Clocking in: %ds"):format(math.ceil(booth.countdown or 0)), { Size = UDim2.new(1, 0, 0, 26), Font = T.bold, TextColor3 = T.good, LayoutOrder = 4, MaxText = 18 })
 	if booth.isLeader then
 		local nightRow = Kit.new("Frame", { Size = UDim2.new(1, 0, 0, 50), BackgroundTransparency = 1, LayoutOrder = 5, Parent = boothBody })
 		Kit.list(nightRow, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)

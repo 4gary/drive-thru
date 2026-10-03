@@ -280,13 +280,16 @@ end
 -- Lane movement
 ---------------------------------------------------------------------------
 
-local function moveCar(car, x: number, speedMultiplier: number, onArrive: (() -> ())?)
+-- opts.z: drive along a different line (pulling out of the lane); opts.linear: constant speed
+local function moveCar(car, x: number, speedMultiplier: number, onArrive: (() -> ())?, opts: { z: number?, linear: boolean? }?)
 	if car.tween then
 		car.tween:Cancel()
 		car.tween = nil
 	end
 	local root = car.root :: BasePart
-	local distance = math.abs(root.Position.X - x)
+	local z = if opts and opts.z then opts.z else Layout.LaneZ
+	local target = CFrame.new(x, 0, z)
+	local distance = (root.Position - target.Position).Magnitude
 	if distance < 0.05 then
 		if onArrive then
 			task.defer(onArrive)
@@ -294,8 +297,9 @@ local function moveCar(car, x: number, speedMultiplier: number, onArrive: (() ->
 		return
 	end
 	local duration = distance / (Config.CarSpeed * speedMultiplier)
-	local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		CFrame = slotCFrame(x),
+	local style = if opts and opts.linear then Enum.EasingStyle.Linear else Enum.EasingStyle.Quad
+	local tween = TweenService:Create(root, TweenInfo.new(duration, style, Enum.EasingDirection.Out), {
+		CFrame = target, -- cars always face down the lane (+X)
 	})
 	car.tween = tween
 	tween.Completed:Connect(function(state)
@@ -441,13 +445,22 @@ function Customers.leave(car, speedMultiplier: number?)
 		Customers.cars[car.id] = nil
 		return
 	end
-	-- if it's still behind the speaker it has to drive the whole lane anyway
-	moveCar(car, Layout.LaneEndX, speedMultiplier or 1.6, function()
+	local function gone()
 		if car.model then
 			car.model:Destroy()
 		end
 		Customers.cars[car.id] = nil
-	end)
+	end
+	local speed = speedMultiplier or 1.6
+	if index == 1 or not index then
+		moveCar(car, Layout.LaneEndX, speed, gone, { linear = true })
+	else
+		-- not at the front: pull out of the lane first instead of driving through the queue
+		local exitZ = Layout.LaneZ + 11
+		moveCar(car, car.root.Position.X, speed, function()
+			moveCar(car, Layout.LaneEndX, speed, gone, { z = exitZ, linear = true })
+		end, { z = exitZ })
+	end
 end
 
 function Customers.leaveAngry(car, where: string)
@@ -553,7 +566,7 @@ function Customers.init()
 			if s and s.phase == "Running" then
 				local now = os.clock()
 				for _, car in table.clone(Customers.lane) do
-					if car.state == "AtSpeaker" and not car.orderTaker and car.speakerDeadline and now > car.speakerDeadline then
+					if car.state == "AtSpeaker" and not ctx.Orders.activeTaker(car) and car.speakerDeadline and now > car.speakerDeadline then
 						Customers.leaveAngry(car, "speaker")
 					elseif car.state == "AtWindow" and not car.decided and car.windowDeadline and now > car.windowDeadline then
 						if ctx.Window.inspecting(car) and now < car.windowDeadline + 20 then

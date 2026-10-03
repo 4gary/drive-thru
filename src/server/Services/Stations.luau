@@ -404,10 +404,28 @@ end
 
 local function pushAssembly()
 	for viewer in assemblyViewers do
-		if viewer.Parent then
+		if viewer.Parent and ctx.Shift.canAct(viewer) then
 			ctx.Remotes.OpenPanel:FireClient(viewer, "Assembly", Stations.plateData(viewer))
 		else
 			assemblyViewers[viewer] = nil
+		end
+	end
+end
+
+-- Stop pushing assembly updates to a player (booped, hid, left).
+function Stations.forgetViewer(player: Player)
+	if assemblyViewers[player] then
+		assemblyViewers[player] = nil
+		if player.Parent then
+			ctx.closePanel(player, "Assembly")
+		end
+	end
+	for _, station in pours do
+		if station.holder == player then
+			station.holder = nil
+			if player.Parent then
+				ctx.effect("PourEnd", {}, { player })
+			end
 		end
 	end
 end
@@ -691,55 +709,72 @@ function Stations.instantPour(kind: string)
 end
 
 local function setupPour(kind: string, part: BasePart)
-	local station = { fill = 0, holder = nil :: Player?, start = 0, overflowed = false }
+	local station = { fill = 0, holder = nil :: Player?, start = 0 }
 	pours[kind] = station
 	local seconds = fillSeconds(kind)
+	-- The hold auto-completes at 130% (a full overflow). Releasing between PerfectFillMin and 100%
+	-- is a perfect pour; past 100% it overflows. Decided on release so the order in which Roblox fires
+	-- PromptButtonHoldEnded / Triggered doesn't matter.
 	local prompt = makePrompt(part, kind, "Hold to Pour", if kind == "Shake" then "Shake Machine" else "Soda Fountain", {
 		HoldDuration = seconds * 1.3,
 	})
-	prompt.PromptButtonHoldBegan:Connect(function(player)
-		if not ctx.Shift.canAct(player) or held[player] then
-			if held[player] then
-				ctx.notify(player, "Your hands are full.")
-			end
-			return
-		end
-		station.holder = player
-		station.start = os.clock()
-		station.overflowed = false
-		ctx.effect("Pour", { kind = kind, fill = station.fill, seconds = seconds, perfect = Cook.PerfectFillMin }, { player })
-	end)
-	prompt.PromptButtonHoldEnded:Connect(function(player)
-		if station.holder ~= player or station.overflowed then
-			return
-		end
-		station.holder = nil
-		ctx.effect("PourEnd", { kind = kind }, { player })
-		local fill = station.fill + (os.clock() - station.start) / seconds
-		if fill >= Cook.PerfectFillMin then
-			station.fill = 0
-			Stations.give(player, OrderLogic.makeSimpleItem(kind))
-			ctx.notify(player, ("Perfect pour! (%d%%)"):format(math.floor(math.min(fill, 1) * 100)), "good")
-			ctx.Bus:fire("DrinkPoured", player, kind, false)
-		else
-			station.fill = fill
-			ctx.notify(player, ("Keep pouring... %d%% full"):format(math.floor(fill * 100)))
-		end
-	end)
-	prompt.Triggered:Connect(function(player)
-		if station.holder ~= player then
-			return
-		end
-		station.overflowed = true
-		station.holder = nil
+
+	local function overflow(player: Player)
 		station.fill = 0
-		ctx.effect("PourEnd", { kind = kind }, { player })
 		Stations.give(player, OrderLogic.makeSimpleItem(kind))
 		ctx.Characters.addPuddle(part.Position + Vector3.new(0, 0, -5.5))
 		ctx.notify(player, "OVERFLOW! The floor is sticky now.", "bad")
 		ctx.caption("[splorsh — sticky floor]", part.Position, 2)
 		ctx.Badges.award(player, "sticky")
 		ctx.Bus:fire("DrinkPoured", player, kind, true)
+	end
+
+	local function finish(player: Player, completed: boolean)
+		if station.holder ~= player then
+			return
+		end
+		station.holder = nil
+		ctx.effect("PourEnd", { kind = kind }, { player })
+		if not ctx.Shift.canAct(player) or held[player] then
+			return
+		end
+		local fill = if completed then 1.3 else station.fill + (os.clock() - station.start) / seconds
+		if fill > 1 then
+			overflow(player)
+		elseif fill >= Cook.PerfectFillMin then
+			station.fill = 0
+			Stations.give(player, OrderLogic.makeSimpleItem(kind))
+			ctx.notify(player, ("Perfect pour! (%d%%)"):format(math.floor(fill * 100)), "good")
+			ctx.Bus:fire("DrinkPoured", player, kind, false)
+		else
+			station.fill = fill
+			ctx.notify(player, ("Keep pouring... %d%% full"):format(math.floor(fill * 100)))
+		end
+	end
+
+	prompt.PromptButtonHoldBegan:Connect(function(player)
+		if not ctx.Shift.canAct(player) then
+			return
+		end
+		if held[player] then
+			ctx.notify(player, "Your hands are full.")
+			return
+		end
+		local current = station.holder
+		if current and current ~= player and current.Parent and ctx.Shift.canAct(current) then
+			ctx.notify(player, current.DisplayName .. " is using that machine.")
+			return
+		end
+		station.holder = player
+		station.start = os.clock()
+		ctx.effect("Pour", { kind = kind, fill = station.fill, seconds = seconds, perfect = Cook.PerfectFillMin }, { player })
+	end)
+	prompt.PromptButtonHoldEnded:Connect(function(player)
+		local completed = station.holder == player and (os.clock() - station.start) >= seconds * 1.3 - 0.05
+		finish(player, completed)
+	end)
+	prompt.Triggered:Connect(function(player)
+		finish(player, true)
 	end)
 end
 

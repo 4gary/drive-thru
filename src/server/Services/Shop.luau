@@ -133,6 +133,10 @@ function Shop.init()
 		end
 		ctx.PlayerData.own(player, cosmeticId)
 		ctx.PlayerData.markPurchase(player, key)
+		if not ctx.PlayerData.saveNow(player) and not ctx.PlayerData.isMemoryOnly() then
+			-- not saved yet: Roblox will retry the receipt; markPurchase keeps it idempotent
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
 		ctx.notify(player, "Thank you! " .. (Cosmetics.ById[cosmeticId] and Cosmetics.ById[cosmeticId].name or cosmeticId) .. " is in your locker.", "good")
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end

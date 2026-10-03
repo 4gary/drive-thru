@@ -295,8 +295,13 @@ function Shift.start(params)
 		ctx.Characters.respawn(player)
 	end
 	task.delay(0.6, function()
+		if Shift.session ~= s or s.phase ~= "PreShift" then
+			return
+		end
 		for _, m in s.order do
-			ctx.openPanel(m.player, "PreShift", Shift.preShiftData())
+			if not m.left and m.player.Parent == Players then
+				ctx.openPanel(m.player, "PreShift", Shift.preShiftData())
+			end
 		end
 	end)
 	ctx.Bus:fire("ShiftStarted", s)
@@ -388,11 +393,12 @@ local function boopTitles(s)
 	return titles, list
 end
 
-local function stopWorld(s)
+-- skipRespawn: the caller is about to reload every character itself (avoid double loads).
+local function stopWorld(s, skipRespawn: boolean?)
 	for _, name in { "Scares", "WeirdEvents", "Customers", "Gizmo", "Hiding", "Ghosts" } do
 		local service = ctx[name]
 		if service and service.stop then
-			pcall(service.stop, s)
+			pcall(service.stop, s, skipRespawn)
 		end
 	end
 	for _, m in s.order do
@@ -538,7 +544,7 @@ function Shift.endSession()
 	if not s then
 		return
 	end
-	stopWorld(s)
+	stopWorld(s, true)
 	Shift.session = nil
 	local players = {}
 	for _, m in s.order do
@@ -585,7 +591,7 @@ function Shift.restart(night: number)
 	local players = Shift.crewPlayers()
 	local leader = s.leaderUserId
 	local mode = s.mode
-	stopWorld(s)
+	stopWorld(s, true)
 	Shift.session = nil
 	for _, name in { "Customers", "Gizmo", "Orders", "Stations", "Story" } do
 		local service = ctx[name]
@@ -664,6 +670,8 @@ local function onPlayerRemoving(player: Player)
 	end
 	m.left = true
 	ctx.Stations.dropHeld(player)
+	ctx.Stations.forgetViewer(player)
+	ctx.Orders.releaseTaker(player)
 	if ctx.Hiding then
 		ctx.Hiding.forget(player)
 	end

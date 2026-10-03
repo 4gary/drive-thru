@@ -259,8 +259,9 @@ function Orders.openOrder(player: Player)
 		ctx.notify(player, "No car at the speaker yet.")
 		return
 	end
-	if car.orderTaker and car.orderTaker ~= player and car.orderTaker.Parent then
-		ctx.notify(player, car.orderTaker.DisplayName .. " is already taking this order.")
+	local taker = Orders.activeTaker(car)
+	if taker and taker ~= player then
+		ctx.notify(player, taker.DisplayName .. " is already taking this order.")
 		return
 	end
 	car.orderTaker = player
@@ -277,6 +278,28 @@ function Orders.openOrder(player: Player)
 		wantsUsual = car.wantsUsual == true,
 	})
 	ctx.Bus:fire("OrderOpened", car, player)
+end
+
+-- A player stops taking an order (booped, hid, left). Frees the speaker car for others / Gizmo.
+function Orders.releaseTaker(player: Player)
+	for _, car in ctx.Customers.lane do
+		if car.orderTaker == player then
+			car.orderTaker = nil
+		end
+	end
+	if player.Parent then
+		ctx.closePanel(player, "Order")
+	end
+end
+
+-- The player taking this car's order, if they can still finish it.
+function Orders.activeTaker(car): Player?
+	local taker = car.orderTaker
+	if taker and taker.Parent and ctx.Shift.canAct(taker) then
+		return taker
+	end
+	car.orderTaker = nil
+	return nil
 end
 
 local function sanitizeLines(raw: any): { any }?
@@ -379,10 +402,17 @@ function Orders.init()
 
 	ctx.onAction("SubmitOrder", function(player, data)
 		local car = ctx.Customers.get(tonumber(data.carId) or -1)
-		if not car or car.state ~= "AtSpeaker" or not ctx.Shift.canAct(player) then
+		if not car or car.state ~= "AtSpeaker" then
+			ctx.notify(player, "That car isn't at the speaker anymore.", "warn")
+			ctx.closePanel(player, "Order")
 			return
 		end
-		if car.orderTaker and car.orderTaker ~= player then
+		if not ctx.Shift.canAct(player) then
+			return
+		end
+		local taker = Orders.activeTaker(car)
+		if taker and taker ~= player then
+			ctx.notify(player, taker.DisplayName .. " already took this order.", "warn")
 			return
 		end
 		local lines = sanitizeLines(data.lines)
@@ -403,7 +433,7 @@ function Orders.init()
 		while true do
 			task.wait(0.25)
 			local car = if ctx.Shift.isRunning() then ctx.Customers.speakerCar() else nil
-			local enabled = car ~= nil and (car.orderTaker == nil or car.orderTaker.Parent == nil)
+			local enabled = car ~= nil and Orders.activeTaker(car) == nil
 			if consolePrompt and consolePrompt.Enabled ~= enabled then
 				consolePrompt.Enabled = enabled
 			end

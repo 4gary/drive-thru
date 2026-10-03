@@ -90,7 +90,7 @@ test("wrong burger stack doesn't match the ticket", function()
 end)
 
 test("Gerald: empty order + empty bag is perfect", function()
-	assert(OrderLogic.compare({}, {}).perfect)
+	assert(OrderLogic.compare({}, {}).perfect, "empty order + empty bag should be perfect")
 end)
 
 test("describe reads naturally", function()

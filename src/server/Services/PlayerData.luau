@@ -112,10 +112,10 @@ local function load(player: Player)
 	PlayerData.push(player)
 end
 
-local function save(player: Player)
+local function save(player: Player): boolean
 	local data = profiles[player]
 	if not data or memoryOnly or not store then
-		return
+		return false
 	end
 	local copy = Util.deepCopy(data)
 	copy.firstJoin = nil
@@ -127,11 +127,13 @@ local function save(player: Player)
 	else
 		dirty[player] = nil
 	end
+	local saved = ok
 	-- leaderboard (all-time Late Customers caught)
 	pcall(function()
 		local board = DataStoreService:GetOrderedDataStore(Config.LeaderboardStoreName)
 		board:SetAsync(key(player.UserId), data.stats.lateCaught or 0)
 	end)
+	return saved
 end
 
 function PlayerData.get(player: Player)
@@ -326,12 +328,11 @@ function PlayerData.markPurchase(player: Player, purchaseId: string): boolean
 	end
 	data.purchases[purchaseId] = os.time()
 	changed(player)
-	task.spawn(save, player)
 	return true
 end
 
-function PlayerData.saveNow(player: Player)
-	save(player)
+function PlayerData.saveNow(player: Player): boolean
+	return save(player)
 end
 
 function PlayerData.init()

@@ -97,8 +97,8 @@ Config.MinGhostRespawn = 15
 
 Config.Scare = {
 	WarningSeconds = { 5, 5, 5, 4, 3 },
-	RushHourActive = 20,
-	RushHourActiveNight5 = 16,
+	RushHourActive = 24, -- seconds Mr. Munch takes to walk his loop (Nights 3-4)
+	RushHourActiveNight5 = 18,
 	MinGapDesign = { 90, 90, 90, 90, 45 },
 	MinGapFloor = 25,
 	NoScareFirstDesign = 240,
@@ -114,7 +114,7 @@ Config.Munch = {
 	HearRange = 7, -- sees you at any angle this close
 	BoopDistance = 4.5,
 	LoseSightSeconds = 1.5,
-	KnockCheckRange = 9, -- Night 4+: checks hiding spots this close to his path
+	KnockCheckRange = 11, -- Night 4+: checks hiding spots this close to his path (horizontal)
 	KnockChance = 0.6,
 }
 
@@ -126,8 +126,8 @@ Config.HighBeams = {
 }
 
 Config.Hide = {
-	CampWarnSeconds = 12,
-	CampMaxSeconds = 20,
+	CampWarnSeconds = 20,
+	CampMaxSeconds = 32, -- long enough to hide through a whole Rush Hour, not a whole night
 	RehideCooldown = 4,
 	HoldBreathWindow = 6,
 	HoldBreathHits = 3,

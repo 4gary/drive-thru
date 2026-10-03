@@ -25,6 +25,7 @@ local buttons: { [string]: TextButton } = {}
 local takeButton: TextButton
 local data: any = nil
 local targetIndex = 1
+local lastTargetSig = ""
 
 local OP_FOR = { BunBottom = "Bun", BunTop = "Bun", Patty = "Patty", Cheese = "Cheese", Lettuce = "Lettuce", Pickles = "Pickles", Sauce = "Sauce" }
 
@@ -74,18 +75,29 @@ local function render()
 	end
 	local targets = burgerTargets()
 	targetIndex = math.clamp(targetIndex, 1, math.max(1, #targets))
-	Kit.clear(targetList)
+	-- only rebuild the target buttons when they actually change (never under the player's finger)
+	local sigParts = { tostring(targetIndex) }
 	for i, t in targets do
-		if i > 5 then
-			break
+		if i <= 5 then
+			table.insert(sigParts, t.number .. t.label)
 		end
-		Kit.button(targetList, ("#%d %s"):format(t.number, t.label), if i == targetIndex then T.ketchup else T.panelLight, function()
-			targetIndex = i
-			render()
-		end, { Size = UDim2.new(1, 0, 0, 40), LayoutOrder = i, Font = T.bold })
 	end
-	if #targets == 0 then
-		Kit.label(targetList, "No burgers on the tickets.", { Size = UDim2.new(1, 0, 0, 30), TextColor3 = T.muted, MaxText = 16 })
+	local sig = table.concat(sigParts, "|")
+	if sig ~= lastTargetSig then
+		lastTargetSig = sig
+		Kit.clear(targetList)
+		for i, t in targets do
+			if i > 5 then
+				break
+			end
+			Kit.button(targetList, ("#%d %s"):format(t.number, t.label), if i == targetIndex then T.ketchup else T.panelLight, function()
+				targetIndex = i
+				render()
+			end, { Size = UDim2.new(1, 0, 0, 40), LayoutOrder = i, Font = T.bold })
+		end
+		if #targets == 0 then
+			Kit.label(targetList, "No burgers on the tickets.", { Size = UDim2.new(1, 0, 0, 30), TextColor3 = T.muted, MaxText = 16 })
+		end
 	end
 	local target = targets[targetIndex]
 	local plate = data.stack or {}
@@ -179,6 +191,9 @@ end
 function AssemblyPanel.open(d)
 	if not layer then
 		build()
+	end
+	if not data then
+		lastTargetSig = ""
 	end
 	data = d
 	layer.Visible = true

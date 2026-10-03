@@ -444,15 +444,20 @@ local function weirdEvent(data)
 			mirrored = false
 		end)
 	elseif data.id == "MandatoryFun" and State.isCrew() then
+		-- the default R15 "dance" emote animation (forced fun)
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if humanoid then
+		local animator = humanoid and humanoid:FindFirstChildOfClass("Animator")
+		if animator and humanoid and humanoid.RigType == Enum.HumanoidRigType.R15 then
 			pcall(function()
-				humanoid:PlayEmote("cheer")
-			end)
-			task.delay(2, function()
-				pcall(function()
-					humanoid:PlayEmote("dance")
+				local animation = Instance.new("Animation")
+				animation.AnimationId = "rbxassetid://507771019"
+				local track = animator:LoadAnimation(animation)
+				track.Looped = true
+				track:Play()
+				task.delay(data.duration or 15, function()
+					track:Stop()
+					track:Destroy()
 				end)
 			end)
 		end
@@ -736,8 +741,15 @@ function Effects.init()
 			end
 		end
 	end)
+	player:GetAttributeChangedSignal("Ghost"):Connect(function()
+		if State.isGhost() then
+			stopPour()
+			Effects.highlightHidingSpots(false)
+		end
+	end)
 	player:GetAttributeChangedSignal("Crew"):Connect(function()
 		if not State.isCrew() then
+			stopPour()
 			Effects.beacon(nil)
 			Effects.vignette(nil, false)
 			table.clear(overrides)

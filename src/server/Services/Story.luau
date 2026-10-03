@@ -458,11 +458,16 @@ function Story.beat(id: string, param: any?)
 		ctx.effect("Jingle", { mode = "chorus" })
 		for i, line in StoryData.Reveal do
 			task.delay((i - 1) * 4, function()
-				ctx.radio("...", line, 4)
+				if ctx.Shift.session == s and s.phase == "Running" then
+					ctx.radio("...", line, 4)
+				end
 			end)
 		end
 		setPosters(true)
 		task.delay(9, function()
+			if ctx.Shift.session ~= s or s.phase ~= "Running" then
+				return
+			end
 			statueAtWindow(10)
 			ctx.caption("[behind the window. its smile is not painted on.]", Layout.StatueAtWindow, 4)
 		end)

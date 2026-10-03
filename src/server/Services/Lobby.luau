@@ -3,6 +3,7 @@
 -- is published; in-place in Studio), reconnect, Quick Start, the leaderboard and the lobby TV.
 
 local DataStoreService = game:GetService("DataStoreService")
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -24,6 +25,8 @@ local friendCache: { [string]: boolean } = {}
 local shiftServer = false
 local reserved: any = nil
 local nameCache: { [number]: string } = {}
+local lastSent: { [Player]: string } = {}
+local lastSentAt: { [Player]: number } = {}
 
 function Lobby.isShiftServer(): boolean
 	return shiftServer
@@ -41,13 +44,23 @@ local function unlockedFor(player: Player): number
 	return if profile then profile.nightsUnlocked else 1
 end
 
-local function isFriend(a: Player, b: Player): boolean
+local friendPending: { [string]: boolean } = {}
+
+-- true / false, or nil while the (yielding) lookup runs in the background.
+local function isFriend(a: Player, b: Player): boolean?
+	if RunService:IsStudio() then
+		return true -- Studio test clients have fake ids; treat everyone as friends
+	end
 	local key = math.min(a.UserId, b.UserId) .. ":" .. math.max(a.UserId, b.UserId)
-	if friendCache[key] == nil then
-		local ok, result = pcall(function()
-			return a:IsFriendsWithAsync(b.UserId)
+	if friendCache[key] == nil and not friendPending[key] then
+		friendPending[key] = true
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return a:IsFriendsWithAsync(b.UserId)
+			end)
+			friendCache[key] = ok and result == true
+			friendPending[key] = nil
 		end)
-		friendCache[key] = ok and result == true
 	end
 	return friendCache[key]
 end
@@ -84,7 +97,8 @@ local function leaveBooth(player: Player)
 	end
 end
 
-local function joinBooth(player: Player, booth): boolean
+-- Returns "joined", "rejected" or "pending" (waiting on a friends check).
+local function joinBooth(player: Player, booth): string
 	if #booth.members == 0 then
 		booth.members = { player }
 		booth.leader = player
@@ -92,21 +106,23 @@ local function joinBooth(player: Player, booth): boolean
 		booth.privacy = "Public"
 		booth.countdownEnd = os.clock() + Config.BoothCountdown
 		playerBooth[player] = booth.id
-		return true
+		return "joined"
 	end
-	if #booth.members >= Config.MaxCrew then
-		return false
+	if #booth.members >= Config.MaxCrew or booth.privacy == "Solo" then
+		return "rejected"
 	end
-	if booth.privacy == "Solo" then
-		return false
-	end
-	if booth.privacy == "Friends" and not isFriend(player, booth.leader) then
-		return false
+	if booth.privacy == "Friends" then
+		local friend = isFriend(player, booth.leader)
+		if friend == nil then
+			return "pending"
+		elseif not friend then
+			return "rejected"
+		end
 	end
 	table.insert(booth.members, player)
 	playerBooth[player] = booth.id
 	booth.countdownEnd = math.max(booth.countdownEnd or 0, os.clock() + 6)
-	return true
+	return "joined"
 end
 
 local function launchInPlace(players: { Player }, night: number, leader: Player?, fastStart: boolean): boolean
@@ -235,7 +251,7 @@ local function updateBooths()
 			end
 			if inside then
 				if rejected[player] ~= inside then
-					if not joinBooth(player, booths[inside]) then
+					if joinBooth(player, booths[inside]) == "rejected" then
 						rejected[player] = inside
 						local booth = booths[inside]
 						ctx.notify(player, if booth.privacy == "Solo" then "That crew is going solo." elseif #booth.members >= Config.MaxCrew then "That crew is full." else "That crew is friends-only.", "warn")
@@ -275,7 +291,7 @@ local function lobbyState(player: Player)
 			night = booth.night,
 			nightTitle = Nights.get(booth.night).title,
 			privacy = booth.privacy,
-			countdown = if booth.countdownEnd then math.max(0, booth.countdownEnd - os.clock()) else nil,
+			countdown = if booth.countdownEnd then math.max(0, math.ceil(booth.countdownEnd - os.clock())) else nil,
 		})
 	end
 	local profile = ctx.PlayerData.get(player)
@@ -405,7 +421,18 @@ local function onShiftServerJoin(player: Player)
 	end
 	if reserved then
 		table.insert(reserved.arrived, player)
+		return
 	end
+	-- No crew info and no shift (e.g. rejoining a shift that already closed): back to the lot.
+	task.delay(10, function()
+		if player.Parent and not ctx.Shift.session and not reserved then
+			ctx.notify(player, "That shift has closed. Heading back to the parking lot...")
+			ctx.PlayerData.setActiveShift(player, nil)
+			pcall(function()
+				TeleportService:TeleportAsync(game.PlaceId, { player })
+			end)
+		end
+	end)
 end
 
 local function shiftServerTick()
@@ -440,6 +467,16 @@ function Lobby.init()
 	Players.PlayerRemoving:Connect(function(player)
 		leaveBooth(player)
 		rejected[player] = nil
+		lastSent[player] = nil
+		lastSentAt[player] = nil
+	end)
+	TeleportService.TeleportInitFailed:Connect(function(player, result, message)
+		warn(("[Lobby] teleport failed for %s: %s %s"):format(player.Name, tostring(result), tostring(message)))
+		if shiftServer then
+			return
+		end
+		ctx.PlayerData.setActiveShift(player, nil)
+		ctx.notify(player, "Couldn't reach your shift server. Try clocking in again.", "bad")
 	end)
 	if shiftServer then
 		Players.PlayerAdded:Connect(onShiftServerJoin)
@@ -545,7 +582,15 @@ function Lobby.init()
 				end
 				for _, player in Players:GetPlayers() do
 					if not ctx.Shift.isCrew(player) then
-						ctx.Remotes.LobbyState:FireClient(player, lobbyState(player))
+						local state = lobbyState(player)
+						local encoded = HttpService:JSONEncode(state)
+						if lastSent[player] ~= encoded or os.clock() - (lastSentAt[player] or 0) > 5 then
+							lastSent[player] = encoded
+							lastSentAt[player] = os.clock()
+							ctx.Remotes.LobbyState:FireClient(player, state)
+						end
+					else
+						lastSent[player] = nil
 					end
 				end
 			end)

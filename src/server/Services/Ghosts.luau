@@ -105,6 +105,8 @@ function Ghosts.boop(player: Player, source: string)
 		ctx.Hiding.leave(player, "boop")
 	end
 	ctx.Stations.dropHeld(player)
+	ctx.Stations.forgetViewer(player)
+	ctx.Orders.releaseTaker(player)
 	ctx.Characters.setCrouch(player, false)
 	local seconds = Ghosts.respawnSeconds(s.night)
 	member.ghost = true
@@ -123,17 +125,17 @@ function Ghosts.boop(player: Player, source: string)
 	local pos = if root then root.Position else Layout.RespawnPoint
 	ctx.effect("Booped", { source = source, seconds = seconds }, { player })
 	ctx.effect("CrewBooped", { name = player.DisplayName, userId = player.UserId, source = source, pos = pos })
-	local held = ""
-	ctx.Shift.moment(("%s got booped by %s at %s%s."):format(player.DisplayName, if source == "Munch" then "Mr. Munch" else "the High Beams", Util.formatClock(s.minutes), held), 60)
+	ctx.Shift.moment(("%s got booped by %s at %s."):format(player.DisplayName, if source == "Munch" then "Mr. Munch" else "the High Beams", Util.formatClock(s.minutes)), 60)
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid.PlatformStand = true
 	end
 	task.delay(1.2, makeGhost, player)
 	ctx.Bus:fire("Booped", player, source)
-	if #ctx.Shift.livingMembers() == 0 then
+	-- Ghost Town only applies to a real crew; solo, Gizmo keeps the lights on while you're a ghost.
+	if #ctx.Shift.activeMembers() > 1 and #ctx.Shift.livingMembers() == 0 then
 		task.delay(1.5, function()
-			if ctx.Shift.session == s and #ctx.Shift.livingMembers() == 0 then
+			if ctx.Shift.session == s and #ctx.Shift.activeMembers() > 1 and #ctx.Shift.livingMembers() == 0 then
 				ctx.Shift.fail("GhostTown")
 			end
 		end)
@@ -153,11 +155,18 @@ function Ghosts.respawn(member)
 	ctx.Bus:fire("Respawned", player)
 end
 
--- Bring every ghost back (end of night).
-function Ghosts.stop()
+-- Bring every ghost back (end of night). With skipRespawn the caller reloads characters itself.
+function Ghosts.stop(_session: any?, skipRespawn: boolean?)
 	for _, member in ctx.Shift.activeMembers() do
 		if member.ghost then
-			Ghosts.respawn(member)
+			if skipRespawn then
+				member.ghost = false
+				member.respawnAt = nil
+				member.player:SetAttribute("Ghost", false)
+				member.player:SetAttribute("RespawnAt", nil)
+			else
+				Ghosts.respawn(member)
+			end
 		end
 	end
 end

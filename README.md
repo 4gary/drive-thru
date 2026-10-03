@@ -167,6 +167,21 @@ event in `Data/Nights.luau`, a cosmetic in `Data/Cosmetics.luau`, a code in `Dat
 
 ---
 
+## Known limitations (greybox)
+
+- **Never run in Studio yet.** Everything was checked offline: Roblox type checking, linting,
+  22 Lune tests that build every model and validate all data, and a three-pass code review.
+  But this is its first real playtest, so expect some tuning and a few bugs. Check the
+  **Output** window for `[NightShift]` warnings.
+- **Sounds are placeholders** (built-in Studio sounds, pitch-shifted). Captions carry every cue.
+- **Art is blocks.** Customers, cars, Mr. Munch and Gizmo are built from parts by
+  `ModelFactory.luau`. Tells are deliberately chunky so they read on a phone.
+- **Phones:** the UI scales a 1280×720 layout to fit, so buttons get small on tiny screens.
+- **Public matchmaking** is per lobby server (a Public clock-in pad anyone in that server can
+  join), not global.
+- **Crouch** lowers your hips on R15 avatars (on R6 only the camera drops; High Beams still
+  respects it).
+
 ## Project layout
 
 ```

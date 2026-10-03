@@ -226,6 +226,9 @@ local function onCharacter(player: Player, character: Model)
 		end)
 	end
 	humanoid.Died:Connect(function()
+		if ctx.Stations then
+			ctx.Stations.dropHeld(player)
+		end
 		task.delay(3, function()
 			if player.Parent and player.Character == character then
 				loadCharacter(player)
@@ -262,6 +265,9 @@ function Characters.setCrouch(player: Player, on: boolean)
 	player:SetAttribute("CrouchSince", if on then os.clock() else nil)
 	if humanoid.RigType == Enum.HumanoidRigType.R15 then
 		humanoid.HipHeight = if on then math.max(0.1, s.baseHip - Config.Crouch.HipHeightDrop) else s.baseHip
+	else
+		-- R6 can't lower its hips; at least drop the camera so crouching feels like crouching
+		humanoid.CameraOffset = if on then Vector3.new(0, -1.5, 0) else Vector3.zero
 	end
 end
 

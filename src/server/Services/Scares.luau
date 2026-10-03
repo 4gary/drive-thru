@@ -139,8 +139,14 @@ end
 
 local function runMunch(s, gen: number)
 	local speedMult = if s.night >= 5 then Config.Munch.Night5SpeedMultiplier else 1
-	local walkSpeed = Config.Munch.WalkSpeed * speedMult
-	local chaseSpeed = Config.Munch.ChaseSpeed * speedMult
+	-- walk the loop in about RushHourActive seconds so hiding through it is fair (anti-camping)
+	local pathLength = 0
+	for i = 2, #Layout.MunchPath do
+		pathLength += (Layout.MunchPath[i] - Layout.MunchPath[i - 1]).Magnitude
+	end
+	local active = if s.night >= 5 then Config.Scare.RushHourActiveNight5 else Config.Scare.RushHourActive
+	local walkSpeed = math.max(Config.Munch.WalkSpeed * speedMult, pathLength / active)
+	local chaseSpeed = math.max(Config.Munch.ChaseSpeed * speedMult, walkSpeed * 1.4)
 	local munch = ModelFactory.buildMunch({ realMouth = s.flags.revealed == true })
 	munch.Name = "MrMunch"
 	local root = munch.PrimaryPart :: BasePart
@@ -152,6 +158,7 @@ local function runMunch(s, gen: number)
 	table.insert(spawned, munch)
 	Scares.setStatueVisible(false)
 	local params = rayParams({ munch })
+	local nextParams = 0
 	local index = 2
 	local chasing: Player? = nil
 	local lastSeen = 0
@@ -175,6 +182,11 @@ local function runMunch(s, gen: number)
 		-- look for crew
 		if now >= nextScan then
 			nextScan = now + 0.1
+			if now >= nextParams then
+				-- characters respawn / reconnect mid-walk; keep them out of the ray filter
+				nextParams = now + 1
+				params = rayParams({ munch })
+			end
 			for _, player in ctx.Shift.crewPlayers() do
 				if ctx.Hiding.spotOf(player) == "Freezer" then
 					freezerHiders[player] = true
@@ -203,10 +215,11 @@ local function runMunch(s, gen: number)
 			if not chasing and s.night >= 4 then
 				for _, spotId in Layout.HidingOrder do
 					local spot = Layout.HidingSpots[spotId]
-					if not knocked[spotId] and (spot.prompt - pos).Magnitude < Config.Munch.KnockCheckRange then
+					local flat = Vector3.new(spot.prompt.X - pos.X, 0, spot.prompt.Z - pos.Z)
+					if not knocked[spotId] and flat.Magnitude < Config.Munch.KnockCheckRange then
 						knocked[spotId] = true
 						if #ctx.Hiding.occupants(spotId) > 0 and s.rng:NextNumber() < Config.Munch.KnockChance then
-							facing = Vector3.new(spot.prompt.X - pos.X, 0, spot.prompt.Z - pos.Z).Unit
+							facing = if flat.Magnitude > 0.01 then flat.Unit else facing
 							root.CFrame = CFrame.lookAt(pos, pos + facing)
 							local failed = ctx.Hiding.knock(spotId)
 							for _, p in failed do
@@ -360,7 +373,8 @@ local function highBeams(s, gen: number)
 				local p = rootPart.Position
 				local inKitchen = p.Z > K.min and p.Z < K.max and math.abs(p.X) < 56
 				if inKitchen and math.abs(p.X - x) < Config.HighBeams.BeamWidth / 2 then
-					if head.Position.Y > Layout.Floor + Config.HighBeams.WindowLine then
+					-- crouching keeps you under the window line, whatever your avatar's size or rig
+					if not ctx.Characters.isCrouching(player) then
 						ctx.effect("Frozen", {}, { player })
 						ctx.Ghosts.boop(player, "HighBeams")
 					end

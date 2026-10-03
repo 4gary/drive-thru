@@ -79,6 +79,8 @@ function Hiding.hide(player: Player, spotId: string): boolean
 		return false
 	end
 	ctx.Stations.dropHeld(player)
+	ctx.Stations.forgetViewer(player)
+	ctx.Orders.releaseTaker(player)
 	ctx.Characters.setCrouch(player, false)
 	local record = { spot = spotId, since = os.clock(), warned = false, saved = {} }
 	hidden[player] = record
@@ -155,7 +157,8 @@ function Hiding.knock(spotId: string): { Player }
 		breath[p] = nil
 		ctx.openPanel(p, "HoldBreath", { seconds = Config.Hide.HoldBreathWindow, hits = Config.Hide.HoldBreathHits })
 	end
-	local deadline = os.clock() + Config.Hide.HoldBreathWindow + 1
+	local started = os.clock()
+	local deadline = started + Config.Hide.HoldBreathWindow + 1
 	while os.clock() < deadline do
 		local waiting = false
 		for _, p in inside do
@@ -167,6 +170,11 @@ function Hiding.knock(spotId: string): { Player }
 			break
 		end
 		task.wait(0.1)
+	end
+	-- Mr. Munch stood still while knocking; don't let that count toward anti-camping
+	local paused = os.clock() - started
+	for _, record in hidden do
+		record.since += paused
 	end
 	local failed = {}
 	for _, p in inside do

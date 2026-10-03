@@ -261,6 +261,9 @@ handlers.GhostRider = function(record)
 	task.spawn(function()
 		while WeirdEvents.isActive("GhostRider") and active.GhostRider == record do
 			task.wait(7)
+			if not WeirdEvents.isActive("GhostRider") or active.GhostRider ~= record or not ctx.Shift.isRunning() then
+				break
+			end
 			local tickets = ctx.Orders.tickets
 			if #tickets > 0 then
 				local ticket = tickets[math.random(1, #tickets)]
@@ -332,6 +335,9 @@ end
 function WeirdEvents.stop()
 	for id in table.clone(active) do
 		finish(id)
+	end
+	if propsFolder then
+		propsFolder:ClearAllChildren() -- doilies, fleeing raccoons, floating fries...
 	end
 end
 

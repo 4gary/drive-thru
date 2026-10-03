@@ -32,19 +32,23 @@ Kit.Theme = {
 }
 local T = Kit.Theme
 
-local scales: { UIScale } = {}
+local scales: { { scale: UIScale, gui: ScreenGui } } = {}
 
-local function computeScale(): number
-	local camera = workspace.CurrentCamera
-	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
-	local s = math.min(size.X / 1280, size.Y / 720)
-	return math.clamp(s, 0.6, 1.35)
+-- Everything is laid out on a 1280x720 canvas. The scale fits that canvas into the ScreenGui's
+-- actual (safe-area) size, so panels up to ~1060x600 always fit, even on small phones.
+local function computeScale(size: Vector2?): number
+	local area = size
+	if not area or area.X < 10 then
+		local camera = workspace.CurrentCamera
+		area = if camera then camera.ViewportSize else Vector2.new(1280, 720)
+	end
+	local fitted = math.min(area.X / 1280, area.Y / 720)
+	return math.clamp(fitted, 0.35, 1.35)
 end
 
 local function refreshScales()
-	local s = computeScale()
-	for _, scale in scales do
-		scale.Scale = s
+	for _, entry in scales do
+		entry.scale.Scale = computeScale(entry.gui.AbsoluteSize)
 	end
 end
 
@@ -104,8 +108,11 @@ function Kit.screen(name: string, order: number?, safeArea: boolean?): ScreenGui
 		Parent = gui,
 	})
 	local scale = Kit.new("UIScale", { Parent = root })
-	table.insert(scales, scale)
-	scale.Scale = computeScale()
+	table.insert(scales, { scale = scale, gui = gui })
+	scale.Scale = computeScale(nil)
+	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		scale.Scale = computeScale(gui.AbsoluteSize)
+	end)
 	-- the scaled root is sized so that children laid out at 1280x720 fit any screen
 	local function fit()
 		local s = scale.Scale

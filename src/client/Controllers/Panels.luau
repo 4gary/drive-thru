@@ -61,6 +61,9 @@ function Panels.isOpen(name: string): boolean
 end
 
 -- A dimmed full-screen container for one panel.
+-- Panels that must sit on top of others regardless of creation order.
+local LAYER_Z = { Ending = 20, HoldBreath = 15, Report = 10 }
+
 function Panels.layer(name: string, dim: number?): Frame
 	local layer = Kit.new("Frame", {
 		Name = name,
@@ -68,6 +71,7 @@ function Panels.layer(name: string, dim: number?): Frame
 		BackgroundColor3 = Color3.new(0, 0, 0),
 		BackgroundTransparency = dim or 0.45,
 		Visible = false,
+		ZIndex = LAYER_Z[name] or 1,
 		Parent = Panels.root,
 	})
 	return layer
@@ -89,6 +93,7 @@ do
 	local layer: Frame
 	local content: Frame
 	local timerLabel: TextLabel
+	local timerToken = 0
 	local endsAt = 0
 	function PreShift.open(data)
 		if not layer then
@@ -138,8 +143,10 @@ do
 			State.action("Ready")
 		end, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromScale(1, 1), Size = UDim2.fromOffset(220, 60) })
 		timerLabel = Kit.label(content, "", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromOffset(380, 40), Font = T.bold, TextColor3 = T.muted, MaxText = 20 })
+		timerToken += 1
+		local myToken = timerToken
 		task.spawn(function()
-			while layer.Visible and Panels.isOpen("PreShift") do
+			while myToken == timerToken and layer.Visible and Panels.isOpen("PreShift") do
 				timerLabel.Text = ("Shift starts in %d..."):format(math.max(0, math.ceil(endsAt - os.clock())))
 				task.wait(0.25)
 			end
@@ -305,16 +312,16 @@ do
 		local bar = Kit.new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 60), BackgroundTransparency = 1, Parent = content })
 		Kit.list(bar, Enum.FillDirection.Horizontal, 10, Enum.HorizontalAlignment.Right)
 		if not data.isLeader then
-			Kit.label(bar, "The shift leader picks what's next.", { Size = UDim2.fromOffset(320, 56), TextColor3 = T.muted, MaxText = 16, LayoutOrder = 0 })
+			Kit.label(bar, "The shift leader picks what's next.", { Size = UDim2.fromOffset(220, 56), TextColor3 = T.muted, MaxText = 16, LayoutOrder = 0 })
 		end
 		if data.canNext then
 			Kit.button(bar, "NEXT NIGHT ▶", T.good, function()
 				State.action("Choose", { choice = "next" })
-			end, { Size = UDim2.fromOffset(220, 56), LayoutOrder = 1 })
+			end, { Size = UDim2.fromOffset(210, 56), LayoutOrder = 1 })
 		end
 		Kit.button(bar, "RETRY NIGHT", T.warn, function()
 			State.action("Choose", { choice = "retry" })
-		end, { Size = UDim2.fromOffset(200, 56), LayoutOrder = 2 })
+		end, { Size = UDim2.fromOffset(190, 56), LayoutOrder = 2 })
 		Kit.button(bar, "BACK TO THE LOT", T.panelLight, function()
 			State.action("Choose", { choice = "lobby" })
 		end, { Size = UDim2.fromOffset(220, 56), LayoutOrder = 3 })
@@ -346,8 +353,8 @@ do
 		TweenService:Create(layer, TweenInfo.new(1.5), { BackgroundTransparency = 0 }):Play()
 		local title = Kit.label(layer, data.title or "", { Size = UDim2.new(1, 0, 0, 90), Position = UDim2.fromScale(0, 0.12), Font = T.title, TextColor3 = T.mustard, TextTransparency = 1, MaxText = 70 })
 		TweenService:Create(title, TweenInfo.new(2), { TextTransparency = 0 }):Play()
-		local list = Kit.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.3), Size = UDim2.fromOffset(820, 400), BackgroundTransparency = 1, Parent = layer })
-		Kit.list(list, Enum.FillDirection.Vertical, 6, Enum.HorizontalAlignment.Center)
+		local list = Kit.scroll(layer, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.26), Size = UDim2.fromOffset(860, 440) })
+		Kit.list(list, Enum.FillDirection.Vertical, 4, Enum.HorizontalAlignment.Center)
 		Audio.jingle(if data.id == "Freed" then "normal" else "slow")
 		task.spawn(function()
 			task.wait(2)
@@ -355,7 +362,8 @@ do
 				if token ~= myToken then
 					return
 				end
-				local label = Kit.label(list, line, { Size = UDim2.new(1, 0, 0, 30), Font = T.bold, TextColor3 = T.paper, TextTransparency = 1, LayoutOrder = i, MaxText = 24 })
+				local label = Kit.label(list, line, { Size = UDim2.new(1, -16, 0, 28), Font = T.bold, TextColor3 = T.paper, TextTransparency = 1, LayoutOrder = i, MaxText = 22 })
+				list.CanvasPosition = Vector2.new(0, math.huge)
 				TweenService:Create(label, TweenInfo.new(1), { TextTransparency = 0 }):Play()
 				task.wait(if line == "" then 0.6 else 1.6)
 			end

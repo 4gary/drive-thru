@@ -8,6 +8,7 @@ local CameraView = {}
 
 local stack: { { name: string, cframe: CFrame, fov: number } } = {}
 local savedFov = 70
+local activeTween: Tween? = nil
 
 local function camera(): Camera
 	return workspace.CurrentCamera :: Camera
@@ -16,9 +17,15 @@ end
 local function apply()
 	local cam = camera()
 	local top = stack[#stack]
+	if activeTween then
+		activeTween:Cancel()
+		activeTween = nil
+	end
 	if top then
 		cam.CameraType = Enum.CameraType.Scriptable
-		TweenService:Create(cam, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { CFrame = top.cframe, FieldOfView = top.fov }):Play()
+		local tween = TweenService:Create(cam, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { CFrame = top.cframe, FieldOfView = top.fov })
+		activeTween = tween
+		tween:Play()
 	else
 		cam.CameraType = Enum.CameraType.Custom
 		cam.FieldOfView = savedFov

@@ -45,7 +45,6 @@ local chatPopup: Frame
 
 local lastTicketSig = ""
 local lastCrewSig = ""
-local uvOn = false
 local usedUV = false
 
 ---------------------------------------------------------------------------
@@ -199,14 +198,13 @@ function HUD.toggleUV()
 	if not State.isCrew() or not shift or not shift.flags or not shift.flags.uv then
 		return
 	end
-	uvOn = not uvOn
-	World.setUV(uvOn)
-	if uvOn and not usedUV then
+	World.setUV(not World.uv)
+	if World.uv and not usedUV then
 		usedUV = true
 		State.action("UsedUV")
 	end
 	if buttons.UV then
-		buttons.UV.BackgroundColor3 = if uvOn then T.uv else T.panelLight
+		buttons.UV.BackgroundColor3 = if World.uv then T.uv else T.panelLight
 	end
 end
 
@@ -414,12 +412,14 @@ local function refreshMode()
 	if buttons.Crouch then
 		buttons.Crouch.BackgroundColor3 = if player:GetAttribute("Crouching") then T.mustard else T.panelLight
 	end
-	if not crew then
-		if uvOn then
-			uvOn = false
+	if not crew or ghost then
+		if World.uv then
 			World.setUV(false)
 		end
 		chatPopup.Visible = false
+	end
+	if buttons.UV then
+		buttons.UV.BackgroundColor3 = if World.uv then T.uv else T.panelLight
 	end
 end
 
@@ -451,7 +451,7 @@ function HUD.init()
 	local aroot = Kit.root(always)
 	toastList = Kit.new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 96),
+		Position = UDim2.new(0.5, 0, 0, 134),
 		Size = UDim2.fromOffset(520, 200),
 		BackgroundTransparency = 1,
 		Parent = aroot,
@@ -556,9 +556,11 @@ function HUD.init()
 	Kit.corner(holding, 10)
 
 	-- big buttons (right side)
+	-- on touch screens sit above the jump button
+	local lift = if UserInputService.TouchEnabled then 140 else 12
 	local column = Kit.new("Frame", {
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -12, 1, -12),
+		Position = UDim2.new(1, -12, 1, -lift),
 		Size = UDim2.fromOffset(200, 360),
 		BackgroundTransparency = 1,
 		Parent = root,
@@ -579,7 +581,7 @@ function HUD.init()
 
 	chatPopup = Kit.new("Frame", {
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -214, 1, -12),
+		Position = UDim2.new(1, -214, 1, -lift),
 		Size = UDim2.fromOffset(420, 300),
 		BackgroundColor3 = T.ink,
 		BackgroundTransparency = 0.05,

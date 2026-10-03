@@ -341,14 +341,14 @@ end
 
 local function orderJob(eff: number, gen: number): boolean
 	local car = ctx.Customers.speakerCar()
-	if not car or car.orderTaker then
+	if not car or ctx.Orders.activeTaker(car) then
 		return false
 	end
 	if not moveTo(front(Layout.Stations.OrderConsole), gen) or not work(3, eff, gen) then
 		return true
 	end
 	car = ctx.Customers.speakerCar()
-	if not car or car.orderTaker then
+	if not car or ctx.Orders.activeTaker(car) then
 		return true
 	end
 	local lines = table.clone(car.order or {})
@@ -539,9 +539,19 @@ function Gizmo.reset()
 end
 
 function Gizmo.stop()
-	if state ~= "Off" then
-		state = "Idle"
+	if state == "Off" then
+		return
 	end
+	carry(nil)
+	if ghostModel then
+		ghostModel:Destroy()
+		ghostModel = nil
+	end
+	setVisible(true)
+	if root then
+		root.CFrame = CFrame.lookAt(Layout.GizmoHome, Layout.GizmoHome + Vector3.new(0, 0, 1))
+	end
+	state = "Idle"
 end
 
 function Gizmo.init()
